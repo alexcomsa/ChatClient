@@ -1,12 +1,20 @@
 package ro.alex.client;
 
-import java.io.BufferedReader;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.SocketException;
+import java.nio.charset.Charset;
 import java.util.logging.Logger;
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Unmarshaller;
+import ro.alex.message.ChatMessage;
+import ro.alex.message.Inbox;
+import ro.alex.message.Outbox;
 
 public class Client implements Runnable {
 
@@ -15,14 +23,18 @@ public class Client implements Runnable {
 	public Client(Socket socketToServer) {
 		this.socketToServer = socketToServer;
 		serverIPAddress = this.socketToServer.getInetAddress();
+		outbox = new Outbox();
+		inbox = new Inbox();
 
 	}
 
 	private Socket socketToServer;
 	private InetAddress serverIPAddress;
 	private int timeout = 15000;
-	private InputStreamReader inStream;
-	private BufferedReader inReader;
+	private InputStream inStream;
+	private InputStreamReader inReader;
+	private Inbox inbox;
+	private Outbox outbox;
 
 	public Socket getSocketToServer() {
 		return socketToServer;
@@ -48,19 +60,19 @@ public class Client implements Runnable {
 		this.timeout = timeout;
 	}
 
-	public InputStreamReader getInStream() {
+	public InputStream getInStream() {
 		return inStream;
 	}
 
-	public void setInStream(InputStreamReader inStream) {
+	public void setInStream(InputStream inStream) {
 		this.inStream = inStream;
 	}
 
-	public BufferedReader getInReader() {
+	public InputStreamReader getInReader() {
 		return inReader;
 	}
 
-	public void setInReader(BufferedReader inReader) {
+	public void setInReader(InputStreamReader inReader) {
 		this.inReader = inReader;
 	}
 
@@ -71,13 +83,12 @@ public class Client implements Runnable {
 			socketToServer.setSoTimeout(timeout);
 			LOGGER.info("A connetion is oppend to "
 					+ serverIPAddress.toString());
-			setInStream(new InputStreamReader(socketToServer.getInputStream()));
-			setInReader(new BufferedReader(getInReader()));
+			setInStream((socketToServer.getInputStream()));
+			setInReader(new InputStreamReader(getInStream()));
 
-			while (readServerMessage()!=null) {
-				
-				System.out.println("Message from "+serverIPAddress+readServerMessage()+":\t");
-				
+			while (!socketToServer.isClosed()) {
+				collectMessage();
+				sendOutboundMessage();
 			}
 
 		} catch (SocketException e) {
@@ -91,6 +102,37 @@ public class Client implements Runnable {
 
 	}
 
+	private void sendOutboundMessage() {
+		while (outbox.hasMessages()) {
+
+		}
+
+	}
+
+	private void collectMessage() {
+		String message = readServerMessage();
+
+		if (message.contains("xml")) {
+
+			try {
+				JAXBContext jaxbContext = JAXBContext
+						.newInstance(ChatMessage.class);
+				Unmarshaller jaxbUnmarshaller = jaxbContext
+						.createUnmarshaller();
+				ChatMessage chatMessage = (ChatMessage) jaxbUnmarshaller
+						.unmarshal(new ByteArrayInputStream(message
+								.getBytes(Charset.forName("UTF-8"))));
+				inbox.addMessage(chatMessage);
+
+			} catch (JAXBException e) {
+				
+				e.printStackTrace();
+			}
+
+		}
+
+	}
+
 	private void validate(Socket socketToServer) {
 		if (socketToServer == null) {
 			throw new RuntimeException("The socket is not connected");
@@ -100,17 +142,28 @@ public class Client implements Runnable {
 	}
 
 	private String readServerMessage() {
-		String line = null;
+		StringBuilder aa = new StringBuilder();
 		try {
-			while((line = inReader.readLine())!=null){
-				
+
+			for (int c = inReader.read(); c != -1; c = inReader.read()) {
+
+				aa.append((char) c);
 			}
-			
 		} catch (IOException e) {
-			
-			LOGGER.severe(e.getMessage());
+
+			e.printStackTrace();
 		}
-		return line;
+
+		return aa.toString();
+	}
+
+	public void sendMessage(String toWhom, String content) {
+		ChatMessage message = new ChatMessage();
+		message.setFrom(Integer.toString(socketToServer.getLocalPort()));
+		message.setTo(toWhom);
+		message.setContent(content);
+		outbox.addMessage(message);
+
 	}
 
 }

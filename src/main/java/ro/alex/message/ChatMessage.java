@@ -1,5 +1,10 @@
 package ro.alex.message;
 
+import java.io.StringWriter;
+
+import javax.xml.bind.JAXBContext;
+import javax.xml.bind.JAXBException;
+import javax.xml.bind.Marshaller;
 import javax.xml.bind.annotation.XmlAccessType;
 import javax.xml.bind.annotation.XmlAccessorType;
 import javax.xml.bind.annotation.XmlElement;
@@ -37,6 +42,23 @@ public class ChatMessage {
 	}
 	public void setTo(String to) {
 		this.to = to;
+	}
+	
+	@Override
+	public String toString() {
+		StringWriter retVal = new StringWriter();
+		try {
+			JAXBContext jaxbContext = JAXBContext
+					.newInstance(ChatMessage.class);
+			Marshaller jaxbMarshaller = jaxbContext.createMarshaller();
+			jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+			jaxbMarshaller.marshal(this, retVal);
+		} catch (JAXBException e) {
+
+			e.printStackTrace();
+		}
+
+		return retVal.toString();
 	}
 
 }
